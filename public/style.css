@@ -1,49 +1,194 @@
+/* Reset & Basic Setup */
+* {
+    box-sizing: border-box;
+}
+
 body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     background-color: #2b2b2b;
     color: #f0f0f0;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    margin: 0;
+    height: 100vh;
+    width: 100vw;
+    user-select: none; /* Prevent selection on UI elements */
+}
+
+/* Desktop Area */
+#desktop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 40px; /* Leave space for taskbar */
+    position: relative;
+    background: url('https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=2070&auto=format&fit=crop') no-repeat center center fixed;
+    background-size: cover;
+}
+
+/* Taskbar */
+#taskbar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 40px;
+    background-color: #1e1e1e;
+    border-top: 1px solid #333;
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    z-index: 10000;
+}
+
+#start-button {
+    background-color: #0078d7;
+    color: white;
+    border: none;
+    padding: 5px 15px;
+    font-weight: bold;
+    cursor: pointer;
+    border-radius: 2px;
+    margin-right: 10px;
+}
+
+#start-button:hover {
+    background-color: #1084e0;
+}
+
+.taskbar-item {
+    background-color: #333;
+    color: #ddd;
+    padding: 5px 15px;
+    margin-right: 5px;
+    border-radius: 2px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+}
+
+.taskbar-item:hover {
+    background-color: #444;
+}
+
+.taskbar-item.active {
+    background-color: #444;
+    border-bottom: 2px solid #0078d7;
+}
+
+#clock {
+    margin-left: auto;
+    font-size: 0.9rem;
+    color: #ccc;
+}
+
+/* Windows */
+.window {
+    position: absolute;
+    background-color: #252526;
+    border: 1px solid #007acc;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+    display: flex;
+    flex-direction: column;
+    min-width: 200px;
+    min-height: 150px;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.window-header {
+    background-color: #333;
+    color: white;
+    padding: 5px 10px;
+    cursor: default;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    height: 30px;
+    user-select: none;
+}
+
+.window-header.active {
+    background-color: #007acc;
+}
+
+.window-title {
+    font-size: 0.9rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.window-controls {
+    display: flex;
+}
+
+.window-button {
+    width: 25px;
+    height: 20px;
+    border: none;
+    background: transparent;
+    color: white;
+    font-size: 12px;
+    cursor: pointer;
     display: flex;
     justify-content: center;
     align-items: center;
-    height: 100vh;
+    margin-left: 2px;
 }
 
-#app {
-    text-align: center;
-    border: 1px solid #444;
-    padding: 2rem;
-    border-radius: 8px;
-    background-color: #333;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+.window-button:hover {
+    background-color: rgba(255,255,255,0.1);
 }
 
-#status {
-    margin-top: 1rem;
-    font-weight: bold;
-    color: #e6b800; /* Waiting color */
+.window-button.close:hover {
+    background-color: #e81123;
 }
 
-#status.connected {
-    color: #4caf50; /* Green success */
+.window-content {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background-color: #1e1e1e;
 }
 
-#terminal-container {
-    width: 800px;
-    height: 450px;
-    margin: 1rem auto;
-    background-color: black;
-    text-align: left;
-    padding: 10px;
-    border-radius: 4px;
-    overflow: hidden; /* Important for xterm */
+/* Window Resizers */
+.resizer {
+    position: absolute;
+    z-index: 100;
+}
+.resizer-r { right: 0; top: 0; bottom: 0; width: 5px; cursor: e-resize; }
+.resizer-b { bottom: 0; left: 0; right: 0; height: 5px; cursor: s-resize; }
+.resizer-br { right: 0; bottom: 0; width: 10px; height: 10px; cursor: se-resize; }
+
+/* Start Menu */
+#start-menu {
+    position: absolute;
+    bottom: 40px;
+    left: 0;
+    width: 300px;
+    height: 400px;
+    background-color: #252526;
+    border: 1px solid #333;
+    border-bottom: none;
+    display: none; /* Hidden by default */
+    flex-direction: column;
+    z-index: 9999;
+    box-shadow: 2px 0 5px rgba(0,0,0,0.2);
 }
 
-#log {
-    margin-top: 1rem;
-    font-size: 0.8rem;
-    color: #888;
-    max-height: 100px;
-    overflow-y: auto;
+#start-menu.visible {
+    display: flex;
 }
 
+.start-menu-item {
+    padding: 10px 15px;
+    color: white;
+    cursor: pointer;
+    border-left: 3px solid transparent;
+}
+
+.start-menu-item:hover {
+    background-color: #3e3e42;
+    border-left: 3px solid #007acc;
+}

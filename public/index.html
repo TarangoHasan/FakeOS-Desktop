@@ -3,21 +3,71 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FakeOS</title>
+    <title>FakeOS Desktop</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="/xterm/css/xterm.css" />
 </head>
 <body>
-    <div id="app">
-        <h1>FakeOS</h1>
-        <div id="status">Connecting...</div>
-        <div id="terminal-container"></div>
-        <div id="log"></div>
+    
+    <!-- Desktop Workspace -->
+    <div id="desktop">
+        <!-- Windows will be injected here -->
     </div>
 
+    <!-- Start Menu -->
+    <div id="start-menu">
+        <div class="start-menu-item" onclick="WindowManager.createTerminal()">
+            <span>>_ Terminal</span>
+        </div>
+        <div class="start-menu-item" onclick="alert('File Explorer coming in Phase 4!')">
+            <span>📂 File Explorer</span>
+        </div>
+        <div class="start-menu-item" onclick="window.location.reload()">
+            <span>🔄 Reload System</span>
+        </div>
+    </div>
+
+    <!-- Taskbar -->
+    <div id="taskbar">
+        <button id="start-button">Start</button>
+        <div id="taskbar-apps" style="display:flex;">
+            <!-- Taskbar items will go here -->
+        </div>
+        <div id="clock">12:00 PM</div>
+    </div>
+
+    <!-- External Libraries -->
     <script src="/socket.io/socket.io.js"></script>
     <script src="/xterm/lib/xterm.js"></script>
     <script src="/xterm-addon-fit/lib/xterm-addon-fit.js"></script>
+
+    <!-- System Scripts -->
+    <script src="window-manager.js"></script>
     <script src="client.js"></script>
+
+    <script>
+        // Clock functionality
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('clock').textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // Start Menu Toggle
+        const startBtn = document.getElementById('start-button');
+        const startMenu = document.getElementById('start-menu');
+        
+        startBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            startMenu.classList.toggle('visible');
+        });
+
+        document.addEventListener('click', () => {
+            startMenu.classList.remove('visible');
+        });
+        
+        startMenu.addEventListener('click', (e) => e.stopPropagation());
+    </script>
 </body>
 </html>

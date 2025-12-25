@@ -1,54 +1,75 @@
 const socket = io();
-const statusDiv = document.getElementById('status');
-const logDiv = document.getElementById('log');
+const statusDiv = document.getElementById('status'); // Might be missing in new HTML, check existence
 
-// Initialize Terminal
-const term = new Terminal({
-    cursorBlink: true,
-    fontFamily: 'Consolas, "Courier New", monospace',
-    fontSize: 14,
-    theme: {
-        background: '#000000',
-    }
-});
-const fitAddon = new FitAddon.FitAddon();
-term.loadAddon(fitAddon);
-term.open(document.getElementById('terminal-container'));
-fitAddon.fit();
-
-// Send terminal input to server
-term.onData(data => {
-    socket.emit('term-input', data);
-});
+// Global list of active terminals to handle resizing/data broadcasting
+const activeTerminals = [];
 
 socket.on('connect', () => {
-    statusDiv.textContent = 'Connected to Server';
-    statusDiv.classList.add('connected');
     console.log('Connected to server');
-    
-    // Notify server of initial size
-    socket.emit('term-resize', { cols: term.cols, rows: term.rows });
+    // Open initial terminal
+    spawnTerminal();
 });
 
 socket.on('server-message', (msg) => {
-    const p = document.createElement('p');
-    p.textContent = `Server says: ${msg}`;
-    logDiv.appendChild(p);
+    console.log(`Server says: ${msg}`);
 });
 
-// Write data from server to terminal
 socket.on('term-output', (data) => {
-    term.write(data);
+    activeTerminals.forEach(t => t.write(data));
 });
 
 socket.on('disconnect', () => {
-    statusDiv.textContent = 'Disconnected';
-    statusDiv.classList.remove('connected');
-    term.write('\r\n\x1b[31mDisconnected from server\x1b[0m\r\n');
+    console.log('Disconnected');
+    activeTerminals.forEach(t => t.write('\r\n\x1b[31mDisconnected from server\x1b[0m\r\n'));
 });
 
-// Handle window resize
-window.addEventListener('resize', () => {
-    fitAddon.fit();
-    socket.emit('term-resize', { cols: term.cols, rows: term.rows });
-});
+// Function to spawn a new Terminal Window
+window.spawnTerminal = function() {
+    WindowManager.createWindow('Terminal', 800, 450, (container) => {
+        // Initialize xterm.js
+        const term = new Terminal({
+            cursorBlink: true,
+            fontFamily: 'Consolas, "Courier New", monospace',
+            fontSize: 14,
+            theme: {
+                background: '#1e1e1e',
+            }
+        });
+        
+        const fitAddon = new FitAddon.FitAddon();
+        term.loadAddon(fitAddon);
+        term.open(container);
+        
+        // Fit immediately and on resize
+        setTimeout(() => fitAddon.fit(), 0);
+        
+        // Handle Input
+        term.onData(data => {
+            socket.emit('term-input', data);
+        });
+
+        // Add to active list
+        activeTerminals.push(term);
+        
+        // Handle Resize (Window resize or maximizing)
+        // We use a ResizeObserver on the container to trigger fit
+        const resizeObserver = new ResizeObserver(() => {
+            try {
+                fitAddon.fit();
+                // Send new size to server (using the last resized terminal as authority is imperfect but works for now)
+                socket.emit('term-resize', { cols: term.cols, rows: term.rows });
+            } catch (e) {
+                // Ignore errors if terminal is disposed
+            }
+        });
+        resizeObserver.observe(container);
+
+        // Cleanup when window is closed (We need a way to detect this, 
+        // effectively we'd need to hook into the close button or check existence)
+        // For now, simpler:
+        term.element.addEventListener('DOMNodeRemovedFromDocument', () => {
+             const index = activeTerminals.indexOf(term);
+             if (index > -1) activeTerminals.splice(index, 1);
+        });
+    });
+};
