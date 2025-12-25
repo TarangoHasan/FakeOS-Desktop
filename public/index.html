@@ -5,15 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>FakeOS</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="/xterm/css/xterm.css" />
 </head>
 <body>
     <div id="app">
         <h1>FakeOS</h1>
         <div id="status">Connecting...</div>
+        <div id="terminal-container"></div>
         <div id="log"></div>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
+    <script src="/xterm/lib/xterm.js"></script>
+    <script src="/xterm-addon-fit/lib/xterm-addon-fit.js"></script>
     <script src="client.js"></script>
 </body>
 </html>

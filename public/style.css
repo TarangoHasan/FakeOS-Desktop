@@ -27,3 +27,23 @@ body {
 #status.connected {
     color: #4caf50; /* Green success */
 }
+
+#terminal-container {
+    width: 800px;
+    height: 450px;
+    margin: 1rem auto;
+    background-color: black;
+    text-align: left;
+    padding: 10px;
+    border-radius: 4px;
+    overflow: hidden; /* Important for xterm */
+}
+
+#log {
+    margin-top: 1rem;
+    font-size: 0.8rem;
+    color: #888;
+    max-height: 100px;
+    overflow-y: auto;
+}
+
