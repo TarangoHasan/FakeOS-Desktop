@@ -109,6 +109,19 @@ app.get('/api/file', (req, res) => {
     }
 });
 
+// API: Stream File (for media/html)
+app.get('/api/stream', (req, res) => {
+    const filePath = req.query.path;
+    try {
+        if (!fs.existsSync(filePath)) {
+            return res.status(404).send('File not found');
+        }
+        res.sendFile(path.resolve(filePath));
+    } catch (e) {
+        res.status(500).send(e.message);
+    }
+});
+
 // API: Save File
 app.post('/api/file', (req, res) => {
     const { path: filePath, content } = req.body;
@@ -196,6 +209,43 @@ app.post('/api/move', (req, res) => {
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
+});
+
+// API: Zip Directory/File
+app.post('/api/zip', (req, res) => {
+    const { sourcePath, zipPath } = req.body;
+    const parentDir = path.dirname(sourcePath);
+    const name = path.basename(sourcePath);
+    
+    // Command: tar -a -cf "zipPath" -C "parentDir" "name"
+    // We use cwd option in exec to set directory context, simpler than -C sometimes but -C is standard.
+    const cmd = `tar -a -cf "${zipPath}" -C "${parentDir}" "${name}"`;
+    
+    require('child_process').exec(cmd, (error, stdout, stderr) => {
+        if (error) {
+            console.error('Zip error:', stderr);
+            return res.status(500).json({ error: stderr || error.message });
+        }
+        res.json({ success: true });
+    });
+});
+
+// API: Unzip File
+app.post('/api/unzip', (req, res) => {
+    const { zipPath, destPath } = req.body;
+    
+    // Ensure dest exists
+    if (!fs.existsSync(destPath)) fs.mkdirSync(destPath, { recursive: true });
+
+    const cmd = `tar -xf "${zipPath}" -C "${destPath}"`;
+    
+    require('child_process').exec(cmd, (error, stdout, stderr) => {
+        if (error) {
+            console.error('Unzip error:', stderr);
+            return res.status(500).json({ error: stderr || error.message });
+        }
+        res.json({ success: true });
+    });
 });
 
 // --- Socket.io Logic ---

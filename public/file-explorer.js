@@ -2,23 +2,25 @@ window.FileExplorer = {
     currentPath: '.',
     contextPath: null, 
     clipboard: null, // { path: string, type: 'copy'|'cut' }
+    watcherSetup: false,
 
     // --- Initialization & Explorer Window ---
     open() {
         console.log("Opening File Explorer...");
         // Setup Watcher Listener if not already
         if (!this.watcherSetup) {
-            socket.on('file-change', (data) => {
-                // If the changed path is what we are looking at (or desktop)
-                if (data.path === this.currentPath || data.path === 'drive_c/Desktop' || (data.path.includes('Desktop') && this.currentPath === 'drive_c/Desktop')) {
-                    this.refreshCurrentView();
-                }
-            });
+            if (window.socket) {
+                socket.on('file-change', (data) => {
+                    // If the changed path is what we are looking at (or desktop)
+                    if (data.path === this.currentPath || data.path === 'drive_c/Desktop' || (data.path.includes('Desktop') && this.currentPath === 'drive_c/Desktop')) {
+                        this.refreshCurrentView();
+                    }
+                });
+            }
             this.watcherSetup = true;
         }
 
         WindowManager.createWindow('File Explorer', 700, 500, (container) => {
-// ...
             container.innerHTML = `
                 <div class="fe-toolbar" style="padding: 5px; border-bottom: 1px solid #444; display: flex; gap: 5px;">
                     <button onclick="FileExplorer.navigateUp()">⬆ Up</button>
@@ -47,7 +49,6 @@ window.FileExplorer = {
 
             const res = await fetch(`/api/files?path=${encodeURIComponent(path)}`);
             const data = await res.json();
-// ...
             
             if (data.error) {
                 alert('Error: ' + data.error);
@@ -76,7 +77,7 @@ window.FileExplorer = {
                 item.dataset.isDirectory = file.isDirectory; // Add for Drag & Drop
                 item.style.cssText = 'width: 80px; text-align: center; cursor: pointer; padding: 5px; border-radius: 4px; overflow: hidden;';
                 item.innerHTML = `
-                    <div style="font-size: 2rem; pointer-events: none;">${file.isDirectory ? '📁' : '📄'}</div>
+                    <div style="font-size: 2rem; pointer-events: none;">${this.getFileIcon(file)}</div>
                     <div style="font-size: 0.8rem; word-break: break-all; margin-top: 5px; max-height: 3em; overflow: hidden; pointer-events: none;">${file.name}</div>
                 `;
                 
@@ -87,7 +88,7 @@ window.FileExplorer = {
                     if (file.isDirectory) {
                         this.loadPath(file.path);
                     } else {
-                        FileEditor.open(file.path);
+                        this.openFile(file);
                     }
                 };
                 
@@ -106,7 +107,7 @@ window.FileExplorer = {
     },
 
     navigateUp() {
-        if (this.currentPath === 'ROOT') return;
+        if (this.currentPath === 'ROOT') return; 
         
         const cleanPath = this.currentPath.replace(/[\\/]+$/, '');
         if (/^[a-zA-Z]:$/.test(cleanPath)) {
@@ -148,7 +149,7 @@ window.FileExplorer = {
                 icon.dataset.path = file.path; // Store path
                 icon.dataset.isDirectory = file.isDirectory; // Store type
                 icon.innerHTML = `
-                    <div class="desktop-icon-img">${file.isDirectory ? '📁' : '📄'}</div>
+                    <div class="desktop-icon-img">${this.getFileIcon(file)}</div>
                     <div class="desktop-icon-text">${file.name}</div>
                 `;
 
@@ -178,7 +179,7 @@ window.FileExplorer = {
                         FileExplorer.open(); 
                         setTimeout(() => FileExplorer.loadPath(file.path), 100);
                     } else {
-                        FileEditor.open(file.path);
+                        this.openFile(file);
                     }
                 };
 
@@ -254,7 +255,7 @@ window.FileExplorer = {
         const icon = fe.dragIcon;
         icon.classList.remove('dragging');
         
-        // Check for Drop Target (Folder)
+        // Check for Drop Target (Folder) 
         // We use clientX/Y from the event if available, otherwise we might need to track it
         const x = e.clientX || (parseInt(icon.style.left) + fe.dragOffset.x);
         const y = e.clientY || (parseInt(icon.style.top) + fe.dragOffset.y);
@@ -364,6 +365,24 @@ window.FileExplorer = {
             menuHtml += `
                 <div class="context-menu-item" onclick="alert('Properties: ${file.name}')">Properties</div>
                 <div class="context-menu-separator"></div>
+            `;
+            
+            const ext = file.name.split('.').pop().toLowerCase();
+
+            // HTML files: Open with Editor
+            if (ext === 'html' || ext === 'htm') {
+                menuHtml += `<div class="context-menu-item" onclick="FileEditor.open('${escapedPath}')">Open with Editor</div>`;
+            }
+            
+            // Archives: Extract Here
+            if (['zip', 'rar', 'tar', 'gz', '7z'].includes(ext)) {
+                 menuHtml += `<div class="context-menu-item" onclick="FileExplorer.extractItem('${escapedPath}')">Extract Here</div>`;
+            }
+
+            // Any file/folder: Compress to .zip
+            menuHtml += `<div class="context-menu-item" onclick="FileExplorer.compressItem('${escapedPath}')">Compress to .zip</div>`;
+
+            menuHtml += `
                 <div class="context-menu-item" onclick="FileExplorer.renameItem('${escapedPath}', '${file.name}')">Rename</div>
                 <div class="context-menu-item" onclick="FileExplorer.copyItem('${escapedPath}', 'copy')">Copy</div>
                 <div class="context-menu-item" onclick="FileExplorer.copyItem('${escapedPath}', 'cut')">Cut</div>
@@ -420,7 +439,7 @@ window.FileExplorer = {
     },
 
     pasteItem() {
-        if (!this.clipboard) return;
+        if (!this.clipboard) return; 
         
         const destDir = this.contextPath;
         // Determine destination path (keep original name)
@@ -445,6 +464,54 @@ window.FileExplorer = {
                 this.refreshCurrentView();
             } else {
                 alert('Paste failed: ' + data.error);
+            }
+        });
+    },
+
+    compressItem(path) {
+        const separator = path.includes('\\') ? '\\' : '/';
+        const parentDir = path.substring(0, path.lastIndexOf(separator));
+        const name = path.substring(path.lastIndexOf(separator) + 1);
+        const zipName = name + '.zip';
+        const zipPath = parentDir + separator + zipName;
+
+        const finalZipName = prompt("Archive Name:", zipName);
+        if (!finalZipName) return;
+        
+        const finalZipPath = parentDir + separator + finalZipName;
+
+        fetch('/api/zip', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sourcePath: path, zipPath: finalZipPath })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                this.refreshCurrentView();
+                alert('Compressed successfully!');
+            } else {
+                alert('Compression failed: ' + data.error);
+            }
+        });
+    },
+
+    extractItem(path) {
+        const separator = path.includes('\\') ? '\\' : '/';
+        const parentDir = path.substring(0, path.lastIndexOf(separator));
+        // We extract to same directory
+        fetch('/api/unzip', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ zipPath: path, destPath: parentDir })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                this.refreshCurrentView();
+                alert('Extracted successfully!');
+            } else {
+                alert('Extraction failed: ' + data.error);
             }
         });
     },
@@ -515,6 +582,36 @@ window.FileExplorer = {
             }
             else alert(data.error);
         });
+    },
+
+    getFileIcon(file) {
+        if (file.isDirectory) return '📁';
+        const ext = file.name.split('.').pop().toLowerCase();
+        
+        if (['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'svg'].includes(ext)) return '🖼️';
+        if (['mp4', 'webm', 'ogg', 'mov', 'avi'].includes(ext)) return '🎥';
+        if (['mp3', 'wav', 'aac', 'flac'].includes(ext)) return '🎵';
+        if (['html', 'htm'].includes(ext)) return '🌐';
+        if (['js', 'css', 'json', 'py', 'c', 'cpp', 'h', 'ts', 'jsx', 'tsx'].includes(ext)) return '📜';
+        if (['md', 'txt', 'log'].includes(ext)) return '📝';
+        if (['zip', 'rar', 'tar', 'gz', '7z'].includes(ext)) return '🤐';
+        if (['pdf'].includes(ext)) return '📚';
+        
+        return '📄';
+    },
+
+    openFile(file) {
+        const ext = file.name.split('.').pop().toLowerCase();
+        
+        if (['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'svg'].includes(ext)) {
+            window.FakeMedia.openImage(file.path, file.name);
+        } else if (['mp4', 'webm', 'ogg', 'mov', 'avi'].includes(ext)) {
+            window.FakeMedia.openVideo(file.path, file.name);
+        } else if (['html', 'htm', 'pdf'].includes(ext)) {
+            window.FakeBrowser.open(file.path, file.name);
+        } else {
+            window.FileEditor.open(file.path);
+        }
     }
 };
 
@@ -588,6 +685,65 @@ window.FileEditor = {
         if (path.endsWith('.json')) return 'json';
         if (path.endsWith('.md')) return 'markdown';
         return 'plaintext';
+    }
+};
+
+window.FakeMedia = {
+    openImage(path, name) {
+        WindowManager.createWindow(`Image: ${name}`, 600, 400, (container) => {
+            container.innerHTML = `
+                <div style="width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; background: #000;">
+                    <img src="/api/stream?path=${encodeURIComponent(path)}" style="max-width: 100%; max-height: 100%; object-fit: contain;">
+                </div>
+            `;
+        });
+    },
+    openVideo(path, name) {
+        WindowManager.createWindow(`Video: ${name}`, 600, 400, (container) => {
+            container.innerHTML = `
+                <div style="width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; background: #000;">
+                    <video src="/api/stream?path=${encodeURIComponent(path)}" controls style="max-width: 100%; max-height: 100%; width: 100%;">
+                        Your browser does not support the video tag.
+                    </video>
+                </div>
+            `;
+        });
+    }
+};
+
+window.FakeBrowser = {
+    open(path, name) {
+        const id = 'browser-' + Date.now();
+        const initialUrl = path ? `/api/stream?path=${encodeURIComponent(path)}` : 'about:blank';
+        const displayUrl = path || 'about:blank';
+        const title = name ? `Browser: ${name}` : 'Browser';
+
+        WindowManager.createWindow(title, 800, 600, (container) => {
+            container.innerHTML = `
+                <div style="display: flex; flex-direction: column; height: 100%;">
+                    <div style="padding: 5px; background: #333; display: flex; gap: 5px;">
+                        <input type="text" id="${id}-url" value="${displayUrl}" style="flex: 1; background: #222; color: white; border: 1px solid #444; padding: 3px;" onkeydown="if(event.key === 'Enter') FakeBrowser.navigate('${id}', this.value)">
+                        <button onclick="FakeBrowser.navigate('${id}', document.getElementById('${id}-url').value)">Go</button>
+                    </div>
+                    <iframe id="${id}-frame" src="${initialUrl}" style="flex: 1; border: none; background: white;"></iframe>
+                </div>
+            `;
+        });
+    },
+    
+    navigate(id, url) {
+        const frame = document.getElementById(`${id}-frame`);
+        if (frame) {
+            // Check if it's a web URL or internal path
+            if (url.startsWith('http://') || url.startsWith('https://')) {
+                frame.src = url;
+            } else if (url === 'about:blank') {
+                frame.src = 'about:blank';
+            } else {
+                // Assume internal path
+                frame.src = `/api/stream?path=${encodeURIComponent(url)}`;
+            }
+        }
     }
 };
 
