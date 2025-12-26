@@ -198,7 +198,7 @@ app.post('/api/move', (req, res) => {
     }
 });
 
-// ... (previous code)
+// --- Socket.io Logic ---
 
 io.on('connection', (socket) => {
   console.log('A user connected: ' + socket.id);
@@ -231,15 +231,9 @@ io.on('connection', (socket) => {
       }
   });
 
-// ...
-  // --- Phase 5: Differential Updates (File Watcher) ---
-  let currentWatcher = null;
-  let watcherDebounce = null;
-  // ... (watcher code) ...
-
   // --- Phase 2 & 5: Terminal Setup & Persistence ---
   const activeSessions = global.activeSessions || {};
-  global.activeSessions = activeSessions; // Persist across restarts in dev if using nodemon (optional)
+  global.activeSessions = activeSessions; // Persist across restarts in dev if using nodemon (optional) 
 
   socket.on('join-session', (sessionId) => {
       let session = activeSessions[sessionId];
@@ -258,59 +252,41 @@ io.on('connection', (socket) => {
           session = {
               pty: ptyProcess,
               history: '',
-              listeners: [] 
+              sockets: new Set()
           };
           activeSessions[sessionId] = session;
 
-          // Buffer data
+          // Buffer data & Broadcast
           ptyProcess.onData((data) => {
               session.history += data;
               // Limit history size
               if (session.history.length > 10000) session.history = session.history.slice(-10000);
               
-              // Send to current socket if connected
-              socket.emit('term-output', data);
+              // Broadcast to all sockets in this session
+              session.sockets.forEach(s => s.emit('term-output', data));
           });
           
           ptyProcess.onExit(() => {
-              socket.emit('term-output', '\r\n\x1b[33mSession ended.\x1b[0m\r\n');
+              session.sockets.forEach(s => s.emit('term-output', '\r\n\x1b[33mSession ended.\x1b[0m\r\n'));
               delete activeSessions[sessionId];
           });
           
           console.log(`Created new terminal session: ${sessionId}`);
-      } else {
-          // Reconnect to existing
-          console.log(`Reconnected to terminal session: ${sessionId}`);
-          // Re-bind data emission is handled by the generic onData above?
-          // No, the closure `socket` above refers to the *creator's* socket.
-          // We need a way to update the target socket.
-          
-          // Better approach: The pty onData should iterate over active sockets for this session.
-          // But here we simplify: One user = One socket per session usually.
-          
-          // Let's replace the data listener? No, pty supports multiple listeners but we want to avoid duplicates.
-          // Actually, we can just attach a NEW listener for THIS socket.
-          // And we must ensure we remove it on disconnect.
-          
-          const onData = (data) => socket.emit('term-output', data);
-          session.pty.onData(onData);
-          
-          // Send history
-          socket.emit('term-output', session.history);
-          
-          // Cleanup listener on disconnect
-          socket.on('disconnect', () => {
-              if (session.pty) {
-                   // node-pty doesn't have easy 'removeListener' for specific lambda if not stored
-                   // This is a memory leak risk.
-                   // Fix: Store listeners in session object?
-                   // session.listeners.push(onData); // We can't easily remove specific one from pty.
-                   // Alternative: Have ONE pty listener that emits to an event emitter, and socket subscribes to that.
-              }
-          });
       }
 
+      // Add current socket to session
+      session.sockets.add(socket);
+      console.log(`Joined terminal session: ${sessionId}`);
+
+      // Send history
+      socket.emit('term-output', session.history);
+
       // Handle Input
+      // We need to remove this listener if socket disconnects to prevent memory leak?
+      // Actually socket.on listeners are removed when socket disconnects automatically by socket.io logic usually?
+      // No, socket.io removes listeners ON THE SOCKET object.
+      // But we are adding a listener TO THE SOCKET object here.
+      // `socket.on('term-input', ...)` -> OK.
       socket.on('term-input', (data) => {
         if (session.pty) session.pty.write(data);
       });
@@ -319,11 +295,12 @@ io.on('connection', (socket) => {
       socket.on('term-resize', (size) => {
           if (session.pty) session.pty.resize(size.cols, size.rows);
       });
-  });
 
-  /* 
-     REMOVED OLD SPAWN LOGIC to favor 'join-session'
-  */
+      // Cleanup on disconnect
+      socket.on('disconnect', () => {
+          session.sockets.delete(socket);
+      });
+  });
 
   socket.on('disconnect', () => {
     console.log('User disconnected');
