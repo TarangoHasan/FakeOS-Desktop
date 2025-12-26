@@ -38,5 +38,5 @@ PHASE 5: THE BRAIN (OPTIMIZATION AND PERSISTENCE) [COMPLETE] Goal: Ensure perfor
 
 
 
-PHASE 6: THE LAUNCHPAD (TUTORIAL AND DEPENDENCIES) Goal: Documentation and deployment. Dependencies: Install build-essential, python3, and make on the host. Commands: Use npm install for setup and node server.js to launch. Tutorial: Guide for connecting via IP and managing the headless environment. Win: Easy installation and clear usage instructions for the user.
+PHASE 6: THE LAUNCHPAD (TUTORIAL AND DEPENDENCIES) [COMPLETE] Goal: Documentation and deployment. Dependencies: Install build-essential, python3, and make on the host. Commands: Use npm install for setup and node server.js to launch. Tutorial: Guide for connecting via IP and managing the headless environment. Win: Easy installation and clear usage instructions for the user.
 
